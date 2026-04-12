@@ -1,3 +1,11 @@
+# KayfabeQuery
+data/*.db
+.venv/
+__pycache__/
+resource/
+.firecrawl/
+linkedin-posts/
+
 # Logs
 logs
 *.log
