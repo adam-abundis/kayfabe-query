@@ -88,6 +88,34 @@ Every technical choice and the reasoning behind it.
 
 ---
 
+## 014: Gemini Client — Single Entry Point
+**Date:** 2026-04-13
+**Decision:** Created `src/lib/gemini.ts` as the only place the Gemini client is initialized. Both `generateSQL` and `formatAnswer` import `getModel()` from here.
+**Why:** Both functions need the same client. Duplicating the initialization means two places to update when the model name changes or the provider changes. One file means one change. The calling functions don't need to know anything about the provider — they just call `getModel()`. When Gemini releases a better model or we switch to Claude, it's a one-line change in one file.
+
+---
+
+## 015: process.env Over import.meta.env
+**Date:** 2026-04-13
+**Decision:** All environment variable access uses `process.env`, not `import.meta.env`.
+**Why:** `import.meta.env` is Astro/Vite-specific syntax. It works inside the Astro build but returns undefined when running TypeScript directly with tsx. The test script runs outside Astro. `process.env` works in both contexts — Astro's server runtime and plain Node. Using `import.meta.env` in lib files would mean the pipeline can only be tested through the framework, which makes debugging harder and slower.
+
+---
+
+## 016: Test Script — Three Layers, Independent
+**Date:** 2026-04-13
+**Decision:** The pipeline test is structured in three sections: pure logic (no DB, no API), DB only (no API), then full pipeline (DB + API).
+**Why:** If something breaks, you need to know which layer broke. A single end-to-end test that fails tells you nothing about where the failure is. Section 1 catches validation logic errors with no external dependencies. Section 2 catches database and name resolution issues without spending API tokens. Section 3 only runs if the foundation is solid. Running them in order also means the cheapest tests always run first.
+
+---
+
+## 017: Prompt Guardrails for Exact Column Values
+**Date:** 2026-04-13
+**Decision:** The SQL generation prompt explicitly lists the valid values for result ('win', 'loss', 'draw'), win_type ('pinfall', 'submission', 'DQ', 'count out'), and is_ppv (0 or 1). Show series names always use LIKE, never exact match.
+**Why:** LLMs guess. When Gemini sees a column called result with no guidance, it generates 'winner' instead of 'win'. The query runs, returns 0 rows, and the answer says the wrestler has no wins. No error is thrown. The user just gets a wrong answer. Listing exact values in the prompt eliminates the guess. The database is the source of truth — the prompt has to reflect it precisely.
+
+---
+
 ## 010: User Experience Goal - The Store Analogy
 **Date:** 2026-04-09
 **Decision:** The experience KayfabeQuery delivers is warm, fast, and human. Not robotic.

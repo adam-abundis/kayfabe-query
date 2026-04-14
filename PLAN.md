@@ -24,57 +24,59 @@ Security is not an afterthought — it is built in from Phase 1.
 
 ---
 
-## Phase 1: Prove the Pipeline Works
+## Phase 1: Prove the Pipeline Works — COMPLETE
 **Goal:** The full 5-step pipeline works in a test script. No UI. No Astro. Just TypeScript you can run in the terminal and see a real answer come back.**
 **This is where you learn what an AI agent actually does — by making it work yourself, step by step.**
 
-### 1A: Set up the Astro project
-- `npm create astro@latest` with server mode
-- Install dependencies: `@google/generative-ai`, `better-sqlite3`, `@types/better-sqlite3`
-- Copy `data/kayfabe.db` into the project
-- Create the `lib/` folder structure
+### 1A: Set up the Astro project — DONE
+- ~~`npm create astro@latest` with server mode~~
+- ~~Install dependencies: `@google/generative-ai`, `better-sqlite3`, `@types/better-sqlite3`~~
+- ~~Create the `lib/` folder structure~~
+- ~~`.env` with Gemini API key, `.env.example` committed~~
+- Note: `data/kayfabe.db` is at project root, referenced as `../data/kayfabe.db` from app/
 
-### 1B: Name resolution (`lib/resolveNames.ts`)
+### 1B: Name resolution (`lib/resolveNames.ts`) — DONE
 - Takes a string ("Steve Austin", "The Usos", "The Shield")
-- Searches `match_participants` for matching ring names → returns cagematch_ids
-- Searches `factions` table for team names → returns member cagematch_ids
+- Checks factions table first, early return if matched
+- Falls back to match_participants for individual wrestler lookup
 - Returns: `{ ids: number[], displayNames: string[] }`
-- **Security note:** This is read-only SQL. The user's text is parameterized, never interpolated into the query string. This prevents SQL injection.
+- User input never interpolated into SQL string
 
-### 1C: SQL generation (`lib/generateSQL.ts`)
+### 1C: SQL generation (`lib/generateSQL.ts`) — DONE
 - Makes the first Gemini API call
-- Sends: compressed schema + resolved IDs + 4 few-shot examples + user question
-- Returns: a SQL string
-- The LLM's only job here is writing one SELECT statement
+- Sends: compressed schema + resolved IDs + user question
+- Prompt rules: SELECT only, use IDs not names, always LIMIT, no_data fallback
+- Returns: `{ sql: string, error: string }`
+- try/catch on API call, never crashes pipeline
 
-### 1D: SQL validation (`lib/validateSQL.ts`)
+### 1D: SQL validation (`lib/validateSQL.ts`) — DONE
 - Pure code. No AI involved.
-- Blocks: INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, ATTACH
+- Blocks: INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE, RENAME, ANALYZE, DETACH, PRAGMA, REPLACE, ATTACH
 - Enforces: query must start with SELECT
 - Enforces: must contain LIMIT
-- Validates: only known table names are referenced
-- **This is your primary security layer.** The read-only database connection is the backup.
+- Returns: `{ valid: boolean, sql: string, error: string }`
 
-### 1E: Query execution (`lib/executeQuery.ts`)
-- Opens SQLite in read-only mode: `file:kayfabe.db?mode=ro`
+### 1E: Query execution (`lib/executeQuery.ts`) — DONE
+- Opens SQLite with `{ readonly: true }`
 - Runs the validated SQL
-- Returns rows as JSON
-- If the query errors, catches it and returns a clean error object
+- Returns: `{ rows: object[], error: string }`
+- try/catch returns clean error instead of crashing
 
-### 1F: Result formatting (`lib/formatAnswer.ts`)
+### 1F: Result formatting (`lib/formatAnswer.ts`) — DONE
 - Makes the second Gemini API call
 - Sends: original question + SQL that ran + result rows
-- Instructs the LLM: warm, conversational, knowledgeable fan voice
-- Instructs: data ends January 2026 — be honest if something may be more recent
-- Instructs: if results are empty, explain why, don't just say "no results"
-- Returns: a plain English answer string
+- Prompt: warm wrestling fan voice, honest about Jan 2026 data limit
+- Rules: no outside knowledge, note small samples, end with record count
+- Returns: `{ answer: string, error: string }`
+- try/catch on API call
 
-### 1G: Test script (`scripts/testPipeline.ts`)
-- Runs all 5 steps for 3 real questions
-- Prints each step's output so you can see exactly what the LLM received and returned
-- Run with: `npx tsx scripts/testPipeline.ts`
+### 1G: Test script (`app/scripts/testPipeline.ts`) — DONE
+- 17/17 assertions passing across 3 sections: pure logic, DB only, full pipeline
+- Tests question: "How many matches did Stone Cold Steve Austin win at WrestleMania?"
+- Ground truth verified: Steve Austin has 6 WrestleMania wins in the DB
+- Run with: `npm test` from inside `app/`
 
-**Done when:** You run the test script, ask "How many matches did Stone Cold Steve Austin win at WrestleMania?" and get a real, accurate, conversational answer printed in your terminal.
+**Completed 2026-04-13:** 17/17 assertions passing. "Stone Cold Steve Austin won 6 matches at WrestleMania" — correct answer, verified against ground truth query. Pipeline is real.
 
 ---
 
