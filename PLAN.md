@@ -84,6 +84,15 @@ Security is not an afterthought — it is built in from Phase 1.
 **Goal:** The pipeline moves into an Astro server endpoint. It is rate-limited, secure, and ready for a frontend to call.**
 **This is where the security you built in Phase 1 gets wrapped in production-grade protections.**
 
+### Phase 2 Prep Notes (start here next session)
+- Phase 1 pipeline is committed and pushed to GitHub
+- All 5 lib functions are in `app/src/lib/`
+- `gemini.ts` is the single entry point for the AI client — update model name there if needed
+- Current model: `gemini-2.5-flash` (paid tier, Kayfabe Query project)
+- SCHEMA constant lives in `app/scripts/testPipeline.ts` — needs to be moved to `app/src/lib/schema.ts` before Phase 2 so both the test script and the API endpoint share it
+- `npm test` from inside `app/` runs the full 17-assertion test suite
+- First task in Phase 2: create `src/pages/api/query.ts` and wire the pipeline into it
+
 ### 2A: The endpoint (`src/pages/api/query.ts`)
 - Accepts: `POST` with `{ question: string }`
 - Rejects: missing question, question over 500 characters, non-POST methods
