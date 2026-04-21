@@ -17,6 +17,7 @@ import { generateSQL } from "../src/lib/generateSQL";
 import { validateSQL } from "../src/lib/validateSQL";
 import { executeQuery } from "../src/lib/executeQuery";
 import { formatAnswer } from "../src/lib/formatAnswer";
+import { SCHEMA } from "../src/lib/schema";
 
 function assert(label: string, condition: boolean, detail?: unknown) {
   if (condition) {
@@ -26,18 +27,6 @@ function assert(label: string, condition: boolean, detail?: unknown) {
     process.exitCode = 1;
   }
 }
-
-const SCHEMA = `
-promotions(id, name)
-show_series(id, name, promotion_id)
-shows(id, show_series_id, promotion_id, event_date DATE, location, venue, is_ppv INT -- 0 or 1, attendance INT)
-wrestlers(id, cagematch_id INT, ring_name, gender, birth_date, nationality)
-matches(id, show_id, match_order INT, win_type TEXT -- "pinfall", "submission", "DQ", "count out", duration_seconds INT, match_type, title, is_title_match INT -- 0 or 1, rating_num REAL)
-match_participants(id, match_id, cagematch_id INT, ring_name, result TEXT -- "win", "loss", or "draw")
-title_reigns(id, wrestler_name, title_name, won_date DATE, lost_date DATE, days_held INT, won_event, lost_to)
-factions(id, name, era)
-faction_members(faction_id, cagematch_id INT, ring_name)
-`;
 
 async function main() {
   // ── SECTION 1: SQL VALIDATION ──────────────────────
@@ -55,10 +44,10 @@ async function main() {
   assert("SELECT without LIMIT is blocked", !missingLimit.valid);
   // ── SECTION 2: DB ONLY ─────────────────────────────
   // assert: "Steve Austin" resolves to at least 1 ID
-  const austin = resolveNames("Steve Austin");
+  const austin = resolveNames("How many matches did Steve Austin win?");
   assert("Steve Austin resolves to at least 1 ID", austin.ids.length > 0, austin.ids.length);
   // assert: "The Shield" resolves to exactly 3 IDs (faction)
-  const shield = resolveNames("The Shield");
+  const shield = resolveNames("What were The Shield's best matches?");
   assert(
     "The Shield resolves to exactly 3 IDs (faction)",
     shield.ids.length === 3,
@@ -79,7 +68,7 @@ async function main() {
   // ── SECTION 3: FULL PIPELINE ───────────────────────
   // resolve: "Stone Cold Steve Austin"
   const question = "How many matches did Stone Cold Steve Austin win at WrestleMania?";
-  const resolved = resolveNames("Steve Austin");
+  const resolved = resolveNames(question);
   assert(
     "Stone Cold Steve Austin resolves to at least 1 ID",
     resolved.ids.length > 0,
