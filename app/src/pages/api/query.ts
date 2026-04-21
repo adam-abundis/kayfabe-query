@@ -20,7 +20,38 @@ import { executeQuery } from "../../lib/executeQuery";
 import { formatAnswer } from "../../lib/formatAnswer";
 import { SCHEMA } from "../../lib/schema";
 
+// -------Rate Limit Store-----------------
+// In-memory store (simple Map, resets on server restart)
+// key: IP address, value: number of requests in the current window.
+const requestCounts = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 5; // requests per minute
+const ONE_MINUTE = 60 * 1000; // milliseconds
+
 export const POST: APIRoute = async ({ request }) => {
+  // -------Rate Limit Check----------------
+  // Protects Gemini quota from abuse.
+  // 10 requests per minute per IP address. Checked before anything else runs.
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
+  const now = Date.now();
+  const record = requestCounts.get(ip);
+
+  if (!record || now > record.resetAt) {
+    // first request from IP or window has expiered. Start fresh.
+    requestCounts.set(ip, { count: 1, resetAt: now + ONE_MINUTE });
+  } else if (record.count >= RATE_LIMIT) {
+    // limit hit! stop here. pipeline does not run.
+    return new Response(
+      JSON.stringify({ error: "Too many requests. Please wait a few minutes and try again." }),
+      {
+        status: 429,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  } else {
+    // increment the count and continue
+    record.count++;
+  }
+
   // ------Input Guard---------------------
   // Parse and validate before we run the pipeline
 

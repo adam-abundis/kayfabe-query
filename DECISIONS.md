@@ -67,6 +67,13 @@ Every technical choice and the reasoning behind it.
 
 ---
 
+## 010: User Experience Goal - The Store Analogy
+**Date:** 2026-04-09
+**Decision:** The experience KayfabeQuery delivers is warm, fast, and human. Not robotic.
+**Why:** Most people my age watched wrestling in the 90s and 00s. KayfabeQuery is for them. It's the alternative to Googling three different sources and stitching the answer together in your head. The experience I'm after is the feeling you get when you ask a question at a store and someone answers it quickly, clearly, and warmly. That human warmth is what I want to bring to the web. You have a question. You write it down. The answer comes back. The agent doesn't sound like a robot because it doesn't have to. AI gives us the tools to be warm and aware, not cold and mechanical. Wrestling is silly, but if you can build a SQL agent with wrestling knowledge that feels like a real conversation, you can do it for marketing data, company analytics, anything. That's the real point.
+
+---
+
 ## 011: Data Source Pivot - Kaggle WWE SQLite
 **Date:** 2026-04-10
 **Decision:** Replaced Wikipedia scraping and TheSportsDB as primary data sources with a Kaggle SQLite dataset (`wwe_db_2026-01-18.sqlite`) containing Cagematch.net match data.
@@ -116,7 +123,8 @@ Every technical choice and the reasoning behind it.
 
 ---
 
-## 010: User Experience Goal - The Store Analogy
-**Date:** 2026-04-09
-**Decision:** The experience KayfabeQuery delivers is warm, fast, and human. Not robotic.
-**Why:** Most people my age watched wrestling in the 90s and 00s. KayfabeQuery is for them. It's the alternative to Googling three different sources and stitching the answer together in your head. The experience I'm after is the feeling you get when you ask a question at a store and someone answers it quickly, clearly, and warmly. That human warmth is what I want to bring to the web. You have a question. You write it down. The answer comes back. The agent doesn't sound like a robot because it doesn't have to. AI gives us the tools to be warm and aware, not cold and mechanical. Wrestling is silly, but if you can build a SQL agent with wrestling knowledge that feels like a real conversation, you can do it for marketing data, company analytics, anything. That's the real point.
+## 018: Rate Limit Set to 5 to Match Gemini Free Tier
+
+**Date:** 2026-04-21
+**Decision:** Set IP rate limit to 5 requests per minute, not 10.
+**Why:** Gemini Flash free tier caps at 5 requests per minute per model. Setting our limit higher means requests 6-10 reach Gemini and fail anyway. Matching the limit stops the request before it wastes a round trip.
