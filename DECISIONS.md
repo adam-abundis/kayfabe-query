@@ -128,3 +128,11 @@ Every technical choice and the reasoning behind it.
 **Date:** 2026-04-21
 **Decision:** Set IP rate limit to 5 requests per minute, not 10.
 **Why:** Gemini Flash free tier caps at 5 requests per minute per model. Setting our limit higher means requests 6-10 reach Gemini and fail anyway. Matching the limit stops the request before it wastes a round trip.
+
+---
+
+## 019: Streaming Response — Labeled Envelopes over Single JSON
+
+**Date:** 2026-04-21
+**Decision:** Stream the formatted answer word by word using labeled JSON envelopes instead of waiting for the full response and returning a single JSON object.
+**Why:** Steps 1-4 complete synchronously and produce structured data (sql, rowCount, dataWindow) that the frontend needs all at once. Step 5 (formatAnswer) is the only step that benefits from streaming — the answer text is useful to the user the moment the first word arrives. Returning everything as a single JSON object would mean holding the connection open until Gemini finishes, which feels broken to the user. The response sends a metadata envelope first (sql, rowCount, dataWindow), then streams answer chunks as Gemini generates them, then sends a done or error envelope. This maps directly onto the two-phase loading state planned for Phase 3: the metadata envelope triggers the SQL drawer and provenance strip, the chunks stream the answer in word by word.

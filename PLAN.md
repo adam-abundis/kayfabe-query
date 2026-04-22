@@ -67,8 +67,8 @@ Security is not an afterthought — it is built in from Phase 1.
 - Sends: original question + SQL that ran + result rows
 - Prompt: warm wrestling fan voice, honest about Jan 2026 data limit
 - Rules: no outside knowledge, note small samples, end with record count
-- Returns: `{ answer: string, error: string }`
-- try/catch on API call
+- Returns: `ReadableStream` — labeled envelopes: chunk, done, error
+- streams word by word instead of waiting for the full response
 
 ### 1G: Test script (`app/scripts/testPipeline.ts`) — DONE
 - 17/17 assertions passing across 3 sections: pure logic, DB only, full pipeline
@@ -80,11 +80,11 @@ Security is not an afterthought — it is built in from Phase 1.
 
 ---
 
-## Phase 2: The Secure API Route
+## Phase 2: The Secure API Route - COMPLETE
 **Goal:** The pipeline moves into an Astro server endpoint. It is rate-limited, secure, and ready for a frontend to call.**
 **This is where the security you built in Phase 1 gets wrapped in production-grade protections.**
 
-### Phase 2 Prep Notes (start here next session)
+### Phase 2 Prep Notes (start here next session) - DONE
 - Phase 1 pipeline is committed and pushed to GitHub
 - All 5 lib functions are in `app/src/lib/`
 - `gemini.ts` is the single entry point for the AI client — update model name there if needed
@@ -93,7 +93,7 @@ Security is not an afterthought — it is built in from Phase 1.
 - `npm test` from inside `app/` runs the full 17-assertion test suite
 - First task in Phase 2: create `src/pages/api/query.ts` and wire the pipeline into it
 
-### 2A: The endpoint (`src/pages/api/query.ts`)
+### 2A: The endpoint (`src/pages/api/query.ts`) - DONE
 - Accepts: `POST` with `{ question: string }`
 - Rejects: missing question, question over 500 characters, non-POST methods
 - Runs the full Phase 1 pipeline
@@ -102,19 +102,22 @@ Security is not an afterthought — it is built in from Phase 1.
   - `dataWindow` is always "WWE 1971 through January 2026"
 - All Gemini API keys are server-side only — never sent to the browser
 
-### 2B: Rate limiting
+### 2B: Rate limiting - DONE
 - IP-based: 10 requests per minute per IP address
 - In-memory store (simple Map, resets on server restart)
 - Returns HTTP 429 with a clear message if exceeded
 - **Why this matters:** Gemini Flash is free tier. Without rate limiting, one bad actor drains your daily token budget in minutes.
 
-### 2C: Streaming
+### 2C: Streaming - DONE
 - Convert the endpoint to stream the formatted answer back word by word
 - The SQL generation and execution steps still complete fully before streaming starts
 - Only the final human-readable answer streams
 - Uses the Web Streams API built into Astro
 
 **Done when:** You can `curl` the endpoint with a wrestling question and see a streaming answer come back. The database is still safe — test by trying to send `DROP TABLE wrestlers` in a question and confirming it gets blocked.
+
+### Phase 2C: COMPLETE — 2026-04-21
+19/19 assertions passing. Streaming verified. Labeled envelope format confirmed working.
 
 ---
 
