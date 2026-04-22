@@ -6,7 +6,7 @@
  * a real answer backed by real data comes out.
  *
  * @param request - POST body containing { question: string }
- * @returns { answer: string, sql: string, rowCount: number, dataWindow: string }
+ * @returns ReadableStream — metadata envelope first, then answer chunks, then done or error
  *
  * A failed step returns { error: string, detail: string } and stops the pipeline.
  * The browser uses the HTTP status code to know which shape it received.
@@ -83,11 +83,11 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   // ------Pipeline-------------------------
-  // STEP 1: Resolve resolveNames
+  // Step 1: Resolve resolveNames
   // Scans the full question for known wrestler and faction names
   const wrestlerIds = resolveNames(question);
 
-  // STEP 2: Generate SQL
+  // Step 2: Generate SQL
   // First Gemini API call. Question + ids + schema -> a single SQL SELECT statement
   const rawSQL = await generateSQL(question, wrestlerIds.ids, SCHEMA);
   if (rawSQL.error) {
@@ -97,7 +97,7 @@ export const POST: APIRoute = async ({ request }) => {
     });
   }
 
-  // STEP 3: Validate SQL
+  // Step 3: Validate SQL
   // Blocks anything that isn't a SELECT with a LIMIT. No data manipulation.
   const validatedSQL = validateSQL(rawSQL.sql);
   if (!validatedSQL.valid) {
@@ -110,7 +110,7 @@ export const POST: APIRoute = async ({ request }) => {
     );
   }
 
-  // STEP 4: Execute Query
+  // Step 4: Execute Query
   // creats a read-only SQLite connection and runs the validated SQL
   const rows = executeQuery(validatedSQL.sql);
   if (rows.error) {
@@ -120,25 +120,42 @@ export const POST: APIRoute = async ({ request }) => {
     });
   }
 
-  // STEP 5: Format Answer
-  // Second Gemini call. Raw rows → plain English answer.
-  const formattedAnswer = await formatAnswer(question, validatedSQL.sql, rows.rows as object[]);
-  if (formattedAnswer.error) {
-    return new Response(
-      JSON.stringify({ error: "Failed to format answer", detail: formattedAnswer.error }),
-      { status: 502, headers: { "Content-Type": "application/json" } },
-    );
-  }
-
-  // ------Response---------------------------
-  // Return the answer, SQL, row count, and data window
-  return new Response(
+  // Step 5: send metadata first so the frontend doesn't wait for Gemini, then stream the answer word by word.
+  const encoder = new TextEncoder();
+  const metadataEnvelope =
     JSON.stringify({
-      answer: formattedAnswer.answer,
+      type: "metadata",
       sql: validatedSQL.sql,
       rowCount: rows.rows.length,
       dataWindow: "WWE 1971 through January 2026",
-    }),
-    { status: 200, headers: { "Content-Type": "application/json" } },
-  );
+    }) + "\n";
+
+  const answerStream = await formatAnswer(question, validatedSQL.sql, rows.rows as object[]);
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      // send metadata first — sql, rowCount, and dataWindow are ready before Gemini starts.
+      controller.enqueue(encoder.encode(metadataEnvelope));
+      try {
+        // pipe the answer stream through chunk by chunk as Gemini generates it
+        const reader = answerStream.pipeThrough(new TransformStream()).getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          controller.enqueue(value);
+        }
+        controller.close();
+      } catch (err) {
+        // HTTP 200 and metadata are already sent — status code can't change.
+        const message = err instanceof Error ? err.message : "Stream failed";
+        controller.enqueue(encoder.encode(JSON.stringify({ type: "error", message }) + "\n"));
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
 };

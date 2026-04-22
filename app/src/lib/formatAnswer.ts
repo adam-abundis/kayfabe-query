@@ -2,12 +2,13 @@
  * src/lib/formatAnswer.ts
  *
  * Second Gemini API Call.
- * Takes the raw database rows and turns them int oa plain English answer wit ha warm conversational tone.
+ * Takes the raw database rows and turns them into a plain English answer with a warm conversational tone.
+ * Streams the answer word by word instead of waiting for the full response — steps 1-4 must complete first.
  *
  * @param question - the user's original question
  * @param sql - the SQL that ran
  * @param rows - the rows returned from  executeQuery
- * @returns { answer: string, error: string }
+ * @returns ReadableStream<Uint8Array> - labeled envelopes: chunk, done, error
  */
 
 import { getModel } from "./gemini";
@@ -35,14 +36,33 @@ export async function formatAnswer(question: string, sql: string, rows: object[]
 
   Answer the question in plain English based only on the results above.
   `;
-  try {
-    // Step 2: send prompt to Gemini
-    const model = getModel();
-    const result = await model.generateContent(prompt);
-    // Step 3: return the answer
-    return { answer: result.response.text().trim(), error: "" };
-  } catch (err) {
-    // Step 4: return error if prompt fails.
-    return { answer: "", error: err instanceof Error ? err.message : "Gemini API call failed" };
-  }
+
+  // Step 2: return a stream — sql and rows are ready, only the answer text needs to wait on Gemini.
+  return new ReadableStream({
+    async start(controller) {
+      const encode = (envelope: object) => {
+        return new TextEncoder().encode(JSON.stringify(envelope) + "\n");
+      };
+
+      try {
+        // Step 3: Start the Gemini stream
+        const model = getModel();
+        const result = await model.generateContentStream(prompt);
+
+        // Step 4: Forward each chunk as a labeled envelope as it arrives
+        for await (const chunk of result.stream) {
+          const text = chunk.text();
+          if (text) controller.enqueue(encode({ type: "chunk", text }));
+        }
+        // Step 5: Signal the frontend that the answer is done
+        controller.enqueue(encode({ type: "done" }));
+        controller.close();
+      } catch (err) {
+        // Step 6: if Gemini fails mid-stream, send a clean error envelope
+        const message = err instanceof Error ? err.message : "Gemini stream failed";
+        controller.enqueue(encode({ type: "error", message }));
+        controller.close();
+      }
+    },
+  });
 }
