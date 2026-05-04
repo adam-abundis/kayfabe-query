@@ -121,88 +121,175 @@ Security is not an afterthought — it is built in from Phase 1.
 
 ---
 
-## Phase 3: The Frontend
-**Goal:** A real UI that makes the pipeline feel like a conversation.**
-
-### 3A: Page layout (`src/pages/index.astro`)
-- Clean, centered layout
-- Header with KayfabeQuery name and tagline
-- Data disclaimer: "Covers WWE 1971 through January 2026"
-- The chat area in the middle
-- Input at the bottom
-
-### 3B: Example questions (`src/components/ExampleQuestions.astro`)
-- 5 clickable questions that pre-fill the input
-- Selected based on the 16 questions that best showcase the data
-- Disappear once the user starts asking their own questions
-
-### 3C: Chat messages (`src/components/ChatMessage.astro`)
-- User question displayed on the right
-- Agent answer displayed on the left
-- Clean, readable typography
-- The generated SQL collapsed below every answer by default, expandable ("How I found this")
-  - This proves the answer is real, not hallucinated
-  - Shows any technical interviewer exactly what the agent generated
-  - One of the clearest signals that this is a production-grade tool, not a demo
-
-### 3D: Chat input (`src/components/ChatInput.astro`)
-- Single text input with a send button
-- Disabled while a response is streaming
-- Clears after submission
-- Keyboard accessible: Enter submits, Escape clears
-
-### 3E: Data provenance strip (`src/components/DataProvenance.astro`)
-Every answer includes a small honest strip below it:
-- Row count: "Based on 847 matches in the database"
-- Data window: "Data covers WWE 1971 through January 2026"
-- If results are empty: "No matches found — this may be more recent than our data covers"
-- This is not a disclaimer tucked in fine print. It is part of the answer.
-- **Why this matters:** AI hallucination is a known problem. Showing the data source and row count proves the answer came from real data. No other portfolio SQL agent will have this. It also shows you understand the difference between a demo and a tool people can trust.
-
-### 3F: "What can I ask?" helper (`src/components/WhatCanIAsk.astro`)
-- A collapsible panel explaining what data is available
-- Covers: time range (1971-Jan 2026), promotions covered, what kinds of questions work
-- Lists question categories: match history, title reigns, ratings, win types, factions, head-to-head
-- Is honest about limitations: no post-January 2026, no AEW/NJPW, gender data covers ~1,450 of 4,135 wrestlers
-- This respects the user's time. They know immediately what to ask and what not to expect.
-
-### 3H: Two-phase loading state
-- Phase A ("Thinking..."): while name resolution + SQL generation + execution runs
-- Phase B: answer streams in word by word
-- No blank white screen at any point
-
-**Done when:** You open the browser, click an example question, watch an answer stream in with a data provenance strip below it, and can expand the SQL to see exactly how it was found. It feels like a conversation with someone who shows their work.
+## Phase 3: The Supervisor Harness (Harness Engineering)
+**Goal:** Transform the pipeline from an unpredictable "Black Box" into a deterministic "Harness." You lead the execution. I provide the logic maps.
 
 ---
 
-## Phase 4: Polish
+### 3A: Standardized Envelopes (Principle 8)
+**Status:** In Progress
+
+#### The Problem
+Currently, our `lib/` functions return raw data. If a function returns an empty set or an error, the rest of the pipeline is "flying blind." It doesn't know *why* the failure happened (e.g., was it a DB error or just no matches?).
+
+#### The Solution: `HarnessResult<T>`
+We wrap every result in a standard "Metal" envelope. This ensures the system is **Observable**. We don't guess; we read the `success` flag and the `trace` log.
+
+#### Implementation Checklist
+1. [ ] **Update `lib/schema.ts`**: Define the `HarnessResult<T>` interface.
+2. [ ] **Refactor `lib/resolveNames.ts`**:
+   - Change return type to `HarnessResult`.
+   - Add `trace` logging for faction and wrestler scanning steps.
+   - Wrap in `try/catch` for deterministic error reporting.
+
+---
+
+### 3B: Whitelist Validator (Principle 4 & 9)
+**Status:** Pending
+
+#### The Problem
+The current `validateSQL.ts` uses a "Blacklist" (blocking `DROP`, `DELETE`). Blacklists are inherently leaky—there is always a clever way to bypass them (e.g., `ATTACH DATABASE`).
+
+#### The Solution: Whitelist Enforcement
+We move from "Magic" (trying to catch bad words) to "Metal" (only allowing good words). If a keyword isn't on the approved list (e.g., `SELECT`, `JOIN`, `LIMIT`), the query is physically blocked.
+
+#### Implementation Checklist
+1. [ ] **Define Whitelist**: Create a strict constant of allowed SQLite keywords.
+2. [ ] **Refactor `lib/validateSQL.ts`**:
+   - Strip all non-whitelisted characters/words.
+   - Enforce the "SELECT only" rule at the parser level.
+
+---
+
+### 3C: Trajectory Controller (Principle 2)
+**Status:** Pending
+
+#### The Problem
+If the AI generates a slightly wrong SQL syntax, the whole pipeline crashes. This is "False Infeasibility"—the task is possible, but the local strategy failed.
+
+#### The Solution: The Orchestrator
+We build a "Conductor" (`lib/orchestrator.ts`) that manages the pipeline flow. It can detect a syntax error, send it back for a "Lite" AI correction, and retry **once** before stopping.
+
+#### Implementation Checklist
+1. [ ] **Create `lib/orchestrator.ts`**: A central state machine to call each `lib` function.
+2. [ ] **Implement Retry Logic**: Add one-shot correction for SQL syntax errors.
+3. [ ] **Add `EXPLAIN QUERY PLAN`**: Use deterministic DB checks before running any query.
+
+---
+
+### 3D: Full Observability (Principle 5)
+**Status:** Pending
+
+#### The Problem
+When the AI gives a weird answer, we have to guess what happened. We lack an "Audit Trail."
+
+#### The Solution: Session Logging
+Every interaction creates a `LOG-[TIMESTAMP].json` file. This is the "Receipt." It contains the raw input, the AI's first attempt, the validator's feedback, and the final result.
+
+#### Implementation Checklist
+1. [ ] **Build `lib/logger.ts`**: A utility to write JSON logs to a `logs/` directory.
+2. [ ] **Integrate with Orchestrator**: Capture the `trace` from every `HarnessResult` into the final log.
+
+---
+
+### 3E: Integrity Test Suite (Validation)
+**Status:** Pending
+
+#### The Problem
+We shouldn't trust that the harness works just because we wrote it.
+
+#### The Solution: The Red Team Test
+We write tests that intentionally try to break the system (e.g., passing a malicious question) to verify the Whitelist and Orchestrator catch it.
+
+#### Implementation Checklist
+1. [ ] **Create `tests/harness.test.ts`**: Dedicated suite for "Systems Integrity."
+2. [ ] **Assert Failure**: Prove that `DROP TABLE` results in a clean `HarnessResult` error, not a DB crash.
+
+---
+
+## Phase 4: The Frontend
+**Goal:** A real UI that makes the pipeline feel like a conversation.
+
+### 4A: Page layout (`src/pages/index.astro`)
+- Clean, centered layout
+- Header with KayfabeQuery name and tagline
+- Data disclaimer: "Covers WWE 1971 through January 2026"
+- Chat area in the middle, input at the bottom
+- Houses the streaming reader: `fetch` POST `/api/query`, `ReadableStream` reader,
+  dispatches envelope types to component state
+- **Note:** Frontend uses `fetch` with a streaming reader, not `EventSource` — the endpoint is POST
+
+### 4B: Example questions (`src/components/ExampleQuestions.astro`)
+Five questions decided before the component is written. Each one showcases a different
+capability of the schema and produces a list, not a single number.
+
+**The five questions (final):**
+1. "What are the highest rated matches in WrestleMania history?" — ratings + show_series filtering
+2. "Who has won the most matches at WrestleMania?" — match_participants leaderboard, fans will argue with it
+3. "What are the five longest title reigns in WWE history?" — title_reigns, Bruno's ~2,800-day reign will surprise people
+4. "Which wrestlers have the most submission victories?" — win_type column, Bret/Angle/Benoit will surface
+5. "How has average match quality changed by year?" — rating_num by year, literally shows the Attitude Era and the modern renaissance
+
+Component behaviour: clickable chips that pre-fill the input. Disappear after the user submits their first question — they've found their footing, the training wheels come off.
+
+### 4C: Chat messages (`src/components/ChatMessage.astro`)
+- User question right, agent answer left
+- SQL drawer collapsed below every answer by default, expandable ("How I found this")
+  - SQL renders in a `<pre>` block, copyable
+  - Proves the answer is real, not hallucinated
+  - Shows any technical interviewer exactly what the agent generated
+
+### 4D: Chat input (`src/components/ChatInput.astro`)
+- Single text input + send button
+- Disabled while streaming (re-enabled on `done` or `error` envelope)
+- Clears after submission
+- Keyboard accessible: Enter submits, Escape clears
+
+### 4E: Data provenance strip (`src/components/DataProvenance.astro`)
+- Renders as soon as the `metadata` envelope arrives — before the answer text starts streaming
+- `rowCount` and `dataWindow` come from that first envelope, not the end
+- Shows: "Based on 847 matches" + "WWE 1971 through January 2026"
+- Empty result variant: "No matches found — this may be more recent than our data covers"
+- **Why this matters:** Showing the row count proves the answer came from real data. No other portfolio SQL agent will have this. It's the difference between a demo and a tool people can trust.
+
+### 4F: "What can I ask?" helper (`src/components/WhatCanIAsk.astro`)
+- Decide format before building: modal, slide-out panel, or inline collapse
+- Content: time range (1971–Jan 2026), promotions covered, question categories
+  (match history, title reigns, ratings, win types, factions, head-to-head)
+- Honest about limits: no post-January 2026, no AEW/NJPW, gender covers ~1,450 of 4,135 wrestlers
+- Respects the user's time — they know what to ask and what not to expect before they type anything
+
+### 4G: Two-phase loading state
+- Phase A ("Thinking..."): from submission until the `metadata` envelope arrives
+- Phase B: answer streams in word by word, from `metadata` until `done`
+- `metadata` envelope is the transition trigger: SQL drawer and provenance strip render immediately,
+  answer text starts appending with the first `chunk` envelope
+- `done` envelope: re-enables input, clears loading state
+- No blank white screen at any point
+
+**Done when:** You open the browser, click an example question, watch the SQL drawer and provenance strip appear before the answer starts, read the answer stream in word by word, and can expand the SQL to see exactly how it was found. It feels like a conversation with someone who shows their work.
+
+---
+
+## Phase 5: Polish
 **Goal:** The thing you show people. GSAP, accessibility, edge cases.**
 
-### 4A: GSAP entrance animations
+### 5A: GSAP entrance animations
 - Chat messages animate in smoothly
 - Example questions stagger in on load
 - Nothing jarring, everything purposeful
 
-### 4B: Accessibility (WCAG AA)
+### 5B: Accessibility (WCAG AA)
 - All interactive elements keyboard accessible
 - Screen reader announcements for streaming answers
 - Color contrast verified
 - Focus management when messages appear
 
-### 4C: Edge cases
+### 5C: Edge cases
 - Question returns no results → warm explanation, not an empty screen
 - Gemini API is down → clear message, not a stack trace
 - Rate limit hit → friendly message with a wait time
 - Question is not about wrestling → "I only know about WWE wrestling. Try asking about..."
-
-### 4D: The five example questions (to decide together)
-These should show off the best of what the database can do.
-Candidates:
-- "What are the highest rated matches in WrestleMania history?"
-- "How many days did CM Punk hold the WWE Championship?"
-- "Who has the most submission victories in WWE history?"
-- "What were The Shield's most important matches?"
-- "How did women's wrestling change between 2015 and 2020?"
 
 ---
 
@@ -230,13 +317,18 @@ Phase 0A → 0B → 1A → 1B → 1C → 1D → 1E → 1F → 1G
                 ↓
            Phase 2A → 2B → 2C
                 ↓
-           Is the endpoint secure and streaming?
+           Is the pipeline secure and streaming?
            If yes → Phase 3
                 ↓
            Phase 3A → 3B → 3C → 3D → 3E
                 ↓
-           Does it feel like a real product?
+           Is the Harness observing and correcting?
            If yes → Phase 4
+                ↓
+           Phase 4A → 4B → 4C → 4D → 4E
+                ↓
+           Does it feel like a real product?
+           If yes → Phase 5
 ```
 
 Never skip a phase. The test script in Phase 1G is not optional.

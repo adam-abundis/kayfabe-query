@@ -26,6 +26,10 @@ A user types a question about Shawn Michaels. They get back a simple summary tha
 - Built with genuine passion (Adam is a real wrestling fan who got frustrated with existing data sites)
 - Memorable in interviews and on LinkedIn
 
+## Required Skills
+- `astro-dev`: For UI components and server-side logic.
+- `agent-browser`: For verifying the live UI state.
+
 ## Stack
 - **Frontend:** Astro (server mode) + TypeScript
 - **Database:** SQLite locally, Turso for hosting (free tier)

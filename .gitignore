@@ -5,6 +5,7 @@ __pycache__/
 resource/
 .firecrawl/
 linkedin-posts/
+node_modules/
 
 # Logs
 logs
