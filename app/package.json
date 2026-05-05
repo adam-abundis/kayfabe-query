@@ -13,9 +13,11 @@
     "test": "tsx scripts/testPipeline.ts"
   },
   "dependencies": {
+    "@astrojs/check": "^0.9.9",
     "@google/generative-ai": "^0.24.1",
     "astro": "^6.1.5",
-    "better-sqlite3": "^12.8.0"
+    "better-sqlite3": "^12.8.0",
+    "typescript": "^6.0.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

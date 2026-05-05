@@ -1,3 +1,17 @@
+// app/src/lib/schema.ts
+
+/**
+ * The "Envelope" for every step in the pipeline.
+ * Instead of just getting data (or nothing), we get back a full receipt of what the function actually did.
+ * This makes it easier to debug when things go wrong.
+ */
+export interface HarnessResult<T> {
+  success: boolean; // Did this specific step work?
+  data: T | null; // The actual data we found (Wrestler IDs, SQL, or Rows)
+  error?: string; // A short code so the system knows how to fix it (e.g. 'DB_ERROR')
+  trace: string[]; // A step-by-step "paper trail" of every deciscion made inside
+}
+
 export const SCHEMA = `
 promotions(id, name)
 show_series(id, name, promotion_id)

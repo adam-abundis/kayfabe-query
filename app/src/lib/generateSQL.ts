@@ -1,22 +1,28 @@
 /**
  * src/lib/generateSQL.ts
  *
- * First Gemini API Call. Returns only a single SELECT statement
+ * First Gemini API Call. Returns only a single SELECT statement.
  *
  * @param question - the user's plain text question
  * @param ids - cagematch_ids from resolveNames
- * @param schema - compressed database schema so Gemini can understand what tables exist
- * @returns { sql: string, error: string }
+ * @param schema - compressed database schema
+ * @returns HarnessResult - The "Envelope" containing the generated SQL + Audit Trail
  */
 
 import { getModel } from "./gemini";
+import type { HarnessResult } from "./schema";
 
-export async function generateSQL(question: string, ids: number[], schema: string) {
+export async function generateSQL(
+  question: string,
+  ids: number[],
+  schema: string,
+): Promise<HarnessResult<{ sql: string }>> {
+  const trace: string[] = [];
+
   // Step 1: build the prompt
-  //   - compressed schema so Gemini knows what tables exist
-  //   - Wrestler IDs so it uses real numbers, not wrestling names
-  //   - the user's question
-  //   - instruction: return only a SELECT statement, nothing else
+  // We include the schema and the resolved IDs to help Gemini stay accurate.
+  trace.push("Step 1: Building the SQL generation prompt with schema and IDs...");
+
   const prompt = `
   You are a SQL expert for KayfabeQuery, a WWE wrestling database covering 1971 to January 2026.
 
@@ -40,12 +46,31 @@ export async function generateSQL(question: string, ids: number[], schema: strin
 
   try {
     // Step 2: send prompt to Gemini
+    trace.push("Step 2: Sending request to Gemini API...");
     const model = getModel();
     const result = await model.generateContent(prompt);
-    // Step 3: return the SQL string
-    return { sql: result.response.text().trim(), error: "" };
-  } catch (err) {
-    // Step 4: return error if prompt fails.
-    return { sql: "", error: err instanceof Error ? err.message : "Gemini API call failed" };
+
+    // Step 3: Extract & Clean the SQL string
+    // We record the raw response in the trace so we can see if Gemini is "hallucinating" formatting.
+    const rawText = result.response.text().trim();
+    trace.push("Raw response received from AI.");
+
+    // Strip Markdown backticks (e.g. ```sql ... ```) if they exist
+    const cleanedSql = rawText.replace(/```sql|```/g, "").trim();
+    trace.push("SQL extracted and cleaned from Markdown.");
+
+    return {
+      success: true,
+      data: { sql: cleanedSql },
+      trace,
+    };
+  } catch (err: any) {
+    // Step 4: Handle API failures (e.g. network down, rate limit hit)
+    return {
+      success: false,
+      data: null,
+      error: "SQL_GENERATION_FAILED",
+      trace: [...trace, `API Error: ${err.message}`],
+    };
   }
 }
